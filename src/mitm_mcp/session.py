@@ -9,9 +9,23 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+def _find_bin(name: str) -> str | None:
+    """Find an executable by name. Checks PATH, then the venv bin dir."""
+    found = shutil.which(name)
+    if found:
+        return found
+    # Fall back to looking next to the running Python interpreter
+    # (handles venvs where bin/ is not on PATH)
+    venv_bin = Path(sys.executable).parent / name
+    if venv_bin.exists():
+        return str(venv_bin)
+    return None
 
 
 def _find_addon_script() -> Path:
@@ -130,9 +144,12 @@ class SessionManager:
         Launches mitmdump, creates engagement folder structure, returns Session.
         Raises RuntimeError if mitmdump is not on PATH.
         """
-        mitmdump_bin = shutil.which("mitmdump")
+        mitmdump_bin = _find_bin("mitmdump")
         if mitmdump_bin is None:
-            raise RuntimeError("mitmdump not found on PATH")
+            raise RuntimeError(
+                "mitmdump not found on PATH or in venv. "
+                "Install with: pip install mitmproxy"
+            )
 
         session_id = str(uuid.uuid4())
         safe_name = _sanitize_name(name)
@@ -201,9 +218,12 @@ class SessionManager:
         """
         session = self.get(session_id)
 
-        tshark_bin = shutil.which("tshark")
+        tshark_bin = _find_bin("tshark")
         if tshark_bin is None:
-            raise RuntimeError("tshark not found on PATH")
+            raise RuntimeError(
+                "tshark not found on PATH or in venv. "
+                "Install with: apt install tshark"
+            )
 
         cmd = [tshark_bin, "-i", interface, "-w", str(session.pcap_path), "-q"]
         tshark_proc = subprocess.Popen(cmd)

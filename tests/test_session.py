@@ -12,7 +12,7 @@ from mitm_mcp.session import Session, SessionManager
 class TestCreateSession:
     def test_create_session(self, engagements_dir, mock_subprocess):
         """Creates session with mock Popen, verifies session_id and proxy_running."""
-        with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
              patch("subprocess.Popen", return_value=mock_subprocess):
             mgr = SessionManager(engagements_dir)
             session = mgr.create("test-device")
@@ -21,7 +21,7 @@ class TestCreateSession:
 
     def test_engagement_folder_created(self, engagements_dir, mock_subprocess):
         """Verifies logs/, artifacts/, certs/ dirs exist after create."""
-        with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
              patch("subprocess.Popen", return_value=mock_subprocess):
             mgr = SessionManager(engagements_dir)
             session = mgr.create("test-device")
@@ -32,7 +32,7 @@ class TestCreateSession:
 
     def test_config_json_written(self, engagements_dir, mock_subprocess):
         """Verifies config.json has port, transparent, created_at."""
-        with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
              patch("subprocess.Popen", return_value=mock_subprocess):
             mgr = SessionManager(engagements_dir)
             session = mgr.create("test-device", port=9090, transparent=False)
@@ -43,7 +43,7 @@ class TestCreateSession:
 
     def test_engagement_name_sanitized(self, engagements_dir, mock_subprocess):
         """Evil name has no dots, slashes, or bangs after sanitization."""
-        with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
              patch("subprocess.Popen", return_value=mock_subprocess):
             mgr = SessionManager(engagements_dir)
             session = mgr.create("../../etc/evil!")
@@ -54,7 +54,7 @@ class TestCreateSession:
 
     def test_duplicate_names_get_unique_folders(self, engagements_dir, mock_subprocess):
         """Two sessions with same name get different engagement paths."""
-        with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
              patch("subprocess.Popen", return_value=mock_subprocess):
             mgr = SessionManager(engagements_dir)
             s1 = mgr.create("dupe")
@@ -63,7 +63,7 @@ class TestCreateSession:
 
     def test_raises_if_mitmdump_not_on_path(self, engagements_dir):
         """RuntimeError if mitmdump binary not found."""
-        with patch("shutil.which", return_value=None):
+        with patch("mitm_mcp.session._find_bin", return_value=None):
             mgr = SessionManager(engagements_dir)
             with pytest.raises(RuntimeError, match="mitmdump"):
                 mgr.create("test-device")
@@ -72,7 +72,7 @@ class TestCreateSession:
 class TestGetSession:
     def test_get_session(self, engagements_dir, mock_subprocess):
         """Retrieves session by ID."""
-        with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
              patch("subprocess.Popen", return_value=mock_subprocess):
             mgr = SessionManager(engagements_dir)
             session = mgr.create("test-device")
@@ -93,12 +93,12 @@ class TestCapture:
         tshark_proc.poll.return_value = None
         tshark_proc.pid = 54321
 
-        with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
              patch("subprocess.Popen", return_value=mock_subprocess) as popen_mock:
             mgr = SessionManager(engagements_dir)
             session = mgr.create("test-device")
 
-        with patch("shutil.which", return_value="/usr/bin/tshark"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/tshark"), \
              patch("subprocess.Popen", return_value=tshark_proc):
             mgr.start_capture(session.session_id)
             assert session.capture_running is True
@@ -109,12 +109,12 @@ class TestCapture:
         tshark_proc.poll.return_value = None
         tshark_proc.pid = 54321
 
-        with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
              patch("subprocess.Popen", return_value=mock_subprocess):
             mgr = SessionManager(engagements_dir)
             session = mgr.create("test-device")
 
-        with patch("shutil.which", return_value="/usr/bin/tshark"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/tshark"), \
              patch("subprocess.Popen", return_value=tshark_proc):
             mgr.start_capture(session.session_id)
 
@@ -130,12 +130,12 @@ class TestCapture:
 
     def test_raises_if_tshark_not_on_path(self, engagements_dir, mock_subprocess):
         """RuntimeError if tshark binary not found."""
-        with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
              patch("subprocess.Popen", return_value=mock_subprocess):
             mgr = SessionManager(engagements_dir)
             session = mgr.create("test-device")
 
-        with patch("shutil.which", return_value=None):
+        with patch("mitm_mcp.session._find_bin", return_value=None):
             with pytest.raises(RuntimeError, match="tshark"):
                 mgr.start_capture(session.session_id)
 
@@ -143,7 +143,7 @@ class TestCapture:
 class TestCloseSession:
     def test_close_session_stops_proxy(self, engagements_dir, mock_subprocess):
         """terminate() called on proxy mock proc."""
-        with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
              patch("subprocess.Popen", return_value=mock_subprocess):
             mgr = SessionManager(engagements_dir)
             session = mgr.create("test-device")
@@ -157,12 +157,12 @@ class TestCloseSession:
         tshark_proc.poll.return_value = None
         tshark_proc.pid = 54321
 
-        with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
              patch("subprocess.Popen", return_value=mock_subprocess):
             mgr = SessionManager(engagements_dir)
             session = mgr.create("test-device")
 
-        with patch("shutil.which", return_value="/usr/bin/tshark"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/tshark"), \
              patch("subprocess.Popen", return_value=tshark_proc):
             mgr.start_capture(session.session_id)
 

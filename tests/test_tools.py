@@ -23,7 +23,7 @@ from mitm_mcp.tools import (
 
 def _make_manager(engagements_dir, mock_subprocess):
     """Create a SessionManager and one session with mocked subprocesses."""
-    with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+    with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
          patch("subprocess.Popen", return_value=mock_subprocess):
         mgr = SessionManager(engagements_dir)
         session = mgr.create("test-device")
@@ -33,7 +33,7 @@ def _make_manager(engagements_dir, mock_subprocess):
 class TestStartProxy:
     @pytest.mark.asyncio
     async def test_creates_session(self, engagements_dir, mock_subprocess):
-        with patch("shutil.which", return_value="/usr/bin/mitmdump"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
              patch("subprocess.Popen", return_value=mock_subprocess):
             mgr = SessionManager(engagements_dir)
             result = await tool_start_proxy(mgr, "test-device", port=8080)
@@ -262,7 +262,7 @@ class TestStartCapture:
         tshark_proc.poll.return_value = None
         tshark_proc.pid = 54321
 
-        with patch("shutil.which", return_value="/usr/bin/tshark"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/tshark"), \
              patch("subprocess.Popen", return_value=tshark_proc):
             result = await tool_start_capture(mgr, session.session_id)
 
@@ -284,7 +284,7 @@ class TestStopCapture:
         tshark_proc.poll.return_value = None
         tshark_proc.pid = 54321
 
-        with patch("shutil.which", return_value="/usr/bin/tshark"), \
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/tshark"), \
              patch("subprocess.Popen", return_value=tshark_proc):
             mgr.start_capture(session.session_id)
 
