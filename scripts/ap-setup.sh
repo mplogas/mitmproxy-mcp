@@ -11,12 +11,13 @@
 #   --dry-run           Show what would be done without changing anything
 #
 # What it does:
-#   1. Installs hostapd + dnsmasq (if missing)
+#   1. Installs hostapd + dnsmasq + tshark (if missing)
 #   2. Writes /etc/hostapd/hostapd.conf
 #   3. Writes /etc/dnsmasq.d/mitm.conf
 #   4. Creates a NetworkManager static connection for the AP interface
 #   5. Enables IP forwarding in sysctl
-#   6. Disables hostapd + dnsmasq from auto-starting (ap-toggle.sh manages them)
+#   6. Disables (but unmasks) hostapd + dnsmasq from auto-starting
+#   7. Adds current user to wireshark group for unprivileged packet capture
 #
 # After running: use ap-toggle.sh start/stop to bring the AP up per engagement.
 
@@ -86,18 +87,25 @@ write_file() {
 
 # -- 1. Install packages (idempotent) ----------------------------------------
 
-echo "[1/6] Checking packages..."
-for pkg in hostapd dnsmasq; do
+echo "[1/7] Checking packages..."
+for pkg in hostapd dnsmasq tshark; do
     if dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
         echo "  $pkg already installed"
     else
+        # tshark asks about non-root capture; pre-answer yes
+        if [[ "$pkg" == "tshark" ]]; then
+            echo "  Installing $pkg (enabling non-root capture)..."
+            if [[ "$DRY_RUN" == "false" ]]; then
+                echo "wireshark-common wireshark-common/install-setuid boolean true" | sudo debconf-set-selections
+            fi
+        fi
         run sudo apt-get install -y "$pkg"
     fi
 done
 
 # -- 2. hostapd config -------------------------------------------------------
 
-echo "[2/6] Writing hostapd config..."
+echo "[2/7] Writing hostapd config..."
 write_file /etc/hostapd/hostapd.conf "\
 interface=${IFACE}
 driver=nl80211
@@ -121,7 +129,7 @@ fi
 
 # -- 3. dnsmasq config -------------------------------------------------------
 
-echo "[3/6] Writing dnsmasq config..."
+echo "[3/7] Writing dnsmasq config..."
 write_file /etc/dnsmasq.d/mitm.conf "\
 interface=${IFACE}
 bind-interfaces
@@ -133,7 +141,7 @@ server=1.1.1.1"
 
 # -- 4. NetworkManager static IP for AP interface ----------------------------
 
-echo "[4/6] Configuring NetworkManager connection '${NM_CONN}'..."
+echo "[4/7] Configuring NetworkManager connection '${NM_CONN}'..."
 if nmcli -t -f NAME connection show | grep -qx "${NM_CONN}"; then
     echo "  Connection '${NM_CONN}' exists, updating..."
     run sudo nmcli connection modify "${NM_CONN}" \
@@ -154,7 +162,7 @@ fi
 
 # -- 5. IP forwarding --------------------------------------------------------
 
-echo "[5/6] Enabling IP forwarding..."
+echo "[5/7] Enabling IP forwarding..."
 if grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
     echo "  Already enabled"
 else
@@ -172,11 +180,26 @@ fi
 
 # -- 6. Disable auto-start (ap-toggle.sh manages these) ----------------------
 
-echo "[6/6] Disabling auto-start for hostapd and dnsmasq..."
+echo "[6/7] Configuring hostapd and dnsmasq services..."
+# Unmask first -- Debian/Bookworm may mask hostapd on install, which
+# prevents systemctl start from working at all.
+run sudo systemctl unmask hostapd 2>/dev/null || true
+run sudo systemctl unmask dnsmasq 2>/dev/null || true
+# Disable auto-start. ap-toggle.sh starts/stops them per engagement.
 run sudo systemctl disable hostapd 2>/dev/null || true
 run sudo systemctl disable dnsmasq 2>/dev/null || true
 run sudo systemctl stop hostapd 2>/dev/null || true
 run sudo systemctl stop dnsmasq 2>/dev/null || true
+
+# -- 7. Wireshark group for unprivileged tshark capture ----------------------
+
+echo "[7/7] Adding $(whoami) to wireshark group..."
+if id -nG "$(whoami)" | grep -qw wireshark; then
+    echo "  Already in wireshark group"
+else
+    run sudo usermod -aG wireshark "$(whoami)"
+    echo "  Added. A new shell or re-login is required for this to take effect."
+fi
 
 # -- Done ---------------------------------------------------------------------
 

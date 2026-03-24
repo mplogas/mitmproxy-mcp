@@ -15,11 +15,13 @@ Built for use with Claude Code on a Raspberry Pi 5, but works with any MCP clien
 ## Requirements
 
 - Python 3.11+
-- mitmproxy (`pip install mitmproxy`)
-- tshark (`apt install tshark`)
+- mitmproxy (`pip install mitmproxy`) -- must be in the same venv as the MCP server
+- tshark (`apt install tshark`) -- user must be in the `wireshark` group for unprivileged capture
 - WiFi AP pre-configured (hostapd + dnsmasq) -- see [AP Setup](#ap-setup)
 - Raspberry Pi 5 (or any Linux box with WiFi + Ethernet)
 - Operator must be SSH'd over Ethernet, not WiFi
+
+The `ap-setup.sh` script handles all system dependencies (hostapd, dnsmasq, tshark, wireshark group, IP forwarding). mitmproxy must be installed separately in the Python venv.
 
 ## Install
 
@@ -89,7 +91,15 @@ sudo ./scripts/ap-setup.sh
 sudo ./scripts/ap-setup.sh --ssid MyProbe --passphrase hunter2hunter2 --channel 11
 ```
 
-The script is idempotent -- safe to rerun with different values. It installs packages, writes configs, creates a NetworkManager connection, enables IP forwarding, and disables hostapd/dnsmasq from auto-starting.
+The script is idempotent -- safe to rerun with different values. It:
+1. Installs hostapd, dnsmasq, and tshark (pre-answers the non-root capture prompt)
+2. Writes hostapd and dnsmasq configs
+3. Creates a NetworkManager static IP connection for the AP interface
+4. Enables IP forwarding
+5. Unmasks and disables hostapd/dnsmasq from auto-starting
+6. Adds the current user to the `wireshark` group (new shell required after first run)
+
+**Note:** On Debian Bookworm, hostapd may be masked on install. The script handles this with `systemctl unmask`.
 
 Available options:
 
