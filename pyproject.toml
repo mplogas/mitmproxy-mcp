@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mitm-mcp"
+version = "0.1.0"
+description = "MCP server for MITM TLS interception and IoT security testing"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0.0",
+]
+
+# mitmproxy and tshark are system dependencies resolved via PATH.
+# They are NOT Python imports -- the MCP server launches them as subprocesses.
+# Install separately: pip install mitmproxy, apt install tshark
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "network: requires WiFi AP and network setup",
+]
