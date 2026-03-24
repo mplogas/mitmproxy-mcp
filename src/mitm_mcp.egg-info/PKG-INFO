@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: mitm-mcp
-Version: 0.1.0
-Summary: MCP server for MITM TLS interception and IoT security testing
-Requires-Python: >=3.11
-Requires-Dist: mcp>=1.0.0
-Provides-Extra: dev
-Requires-Dist: pytest>=8.0; extra == "dev"
-Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
