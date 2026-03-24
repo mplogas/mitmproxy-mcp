@@ -14,6 +14,7 @@ set -euo pipefail
 
 WLAN_IF="${MITM_WLAN_IF:-wlan0}"
 PROXY_PORT="${MITM_PROXY_PORT:-8080}"
+NM_AP_CONN="${MITM_NM_CONN:-mitm-ap}"
 
 iptables_rules() {
     local action="$1"  # -A or -D
@@ -27,9 +28,32 @@ iptables_rules() {
 
 start_ap() {
     echo "Starting AP on $WLAN_IF..."
-    # Stop NetworkManager management of wlan0 to avoid conflicts
+
+    # Disconnect any active WiFi connection on wlan0 and assign static IP
+    # via the NM connection created by ap-setup.sh
+    sudo nmcli device disconnect "$WLAN_IF" 2>/dev/null || true
     sudo nmcli device set "$WLAN_IF" managed no 2>/dev/null || true
-    sudo systemctl start hostapd
+
+    # Assign the static AP gateway address directly. The NM connection
+    # cannot be activated while hostapd also manages the interface, so
+    # we set the address with ip-addr instead.
+    sudo ip addr flush dev "$WLAN_IF" 2>/dev/null || true
+    # Read the gateway from the NM connection if it exists, otherwise default
+    AP_GW=$(nmcli -g ipv4.addresses connection show "$NM_AP_CONN" 2>/dev/null || echo "192.168.4.1/24")
+    sudo ip addr add "$AP_GW" dev "$WLAN_IF" 2>/dev/null || true
+    sudo ip link set "$WLAN_IF" up
+
+    # hostapd may fail on the first attempt if NM hasn't fully released
+    # wlan0 yet. systemd auto-restarts it, so give it a moment.
+    sudo systemctl start hostapd || sleep 2
+    sudo systemctl is-active --quiet hostapd || {
+        echo "Waiting for hostapd to start..."
+        sleep 3
+        sudo systemctl is-active --quiet hostapd || {
+            echo "Error: hostapd failed to start" >&2
+            exit 1
+        }
+    }
     sudo systemctl start dnsmasq
     iptables_rules -A
     echo "AP started. SSID and config from /etc/hostapd/hostapd.conf"
@@ -40,9 +64,12 @@ stop_ap() {
     iptables_rules -D 2>/dev/null || true
     sudo systemctl stop hostapd 2>/dev/null || true
     sudo systemctl stop dnsmasq 2>/dev/null || true
-    # Restore NetworkManager management
+
+    # Remove the static AP address and restore NetworkManager management.
+    # NM will reconnect wlan0 to the previously configured WiFi network.
+    sudo ip addr flush dev "$WLAN_IF" 2>/dev/null || true
     sudo nmcli device set "$WLAN_IF" managed yes 2>/dev/null || true
-    echo "AP stopped."
+    echo "AP stopped. NetworkManager will reconnect wlan0."
 }
 
 case "${1:-}" in
