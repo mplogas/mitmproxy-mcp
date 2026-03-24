@@ -56,8 +56,16 @@ Three tiers enforced at the MCP server boundary:
 
 - mitmproxy installed (provides mitmdump): pip install mitmproxy
 - tshark installed: apt install tshark
-- WiFi AP pre-configured (hostapd + dnsmasq)
+- WiFi AP configured via `scripts/ap-setup.sh` (idempotent, run once or rerun to change values)
 - Operator must be SSH'd over Ethernet, not WiFi
+
+## AP Scripts
+
+- `scripts/ap-setup.sh` -- one-time setup. Installs packages, writes hostapd/dnsmasq configs,
+  creates NetworkManager connection, enables IP forwarding. Idempotent. Use `--dry-run` to preview.
+  Override defaults with `--ssid`, `--passphrase`, `--channel`, `--subnet`, `--interface`.
+- `scripts/ap-toggle.sh` -- per-engagement. `start` brings up hostapd + dnsmasq + iptables rules,
+  `stop` tears them down. Called by the MCP server's start_ap/stop_ap tools.
 
 ## Style
 

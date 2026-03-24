@@ -76,45 +76,33 @@ Passive interception cannot damage hardware or corrupt device state. The device 
 
 ## AP Setup
 
-One-time manual configuration on the Pi:
+Run the setup script once to configure hostapd, dnsmasq, NetworkManager, and IP forwarding:
 
-1. Install hostapd and dnsmasq:
-   ```bash
-   sudo apt install hostapd dnsmasq
-   ```
+```bash
+# Preview what it will do (no changes):
+./scripts/ap-setup.sh --dry-run
 
-2. Configure `/etc/hostapd/hostapd.conf`:
-   ```
-   interface=wlan0
-   ssid=YourSSID
-   hw_mode=g
-   channel=7
-   wpa=2
-   wpa_passphrase=YourPassphrase
-   wpa_key_mgmt=WPA-PSK
-   rsn_pairwise=CCMP
-   ```
+# Run with defaults (SSID: pidev-mitm, passphrase: pidev-mitm-key):
+sudo ./scripts/ap-setup.sh
 
-3. Configure `/etc/dnsmasq.d/mitm.conf`:
-   ```
-   interface=wlan0
-   dhcp-range=192.168.4.10,192.168.4.50,255.255.255.0,24h
-   ```
+# Override defaults:
+sudo ./scripts/ap-setup.sh --ssid MyProbe --passphrase hunter2hunter2 --channel 11
+```
 
-4. Set static IP for wlan0 (via `/etc/network/interfaces` or NetworkManager)
+The script is idempotent -- safe to rerun with different values. It installs packages, writes configs, creates a NetworkManager connection, enables IP forwarding, and disables hostapd/dnsmasq from auto-starting.
 
-5. Enable IP forwarding:
-   ```bash
-   echo 'net.ipv4.ip_forward=1' | sudo tee -a /etc/sysctl.conf
-   sudo sysctl -p
-   ```
+Available options:
 
-6. Disable hostapd and dnsmasq from auto-starting (the AP toggle script manages them):
-   ```bash
-   sudo systemctl disable hostapd dnsmasq
-   ```
+| Flag | Default | Description |
+|---|---|---|
+| `--ssid` | pidev-mitm | AP network name |
+| `--passphrase` | pidev-mitm-key | WPA2 passphrase (min 8 chars) |
+| `--channel` | 7 | WiFi channel |
+| `--subnet` | 192.168.4 | /24 subnet for AP clients |
+| `--interface` | wlan0 | WiFi interface |
+| `--dry-run` | | Show what would be done without changing anything |
 
-The `scripts/ap-toggle.sh` script handles starting/stopping hostapd, dnsmasq, and iptables rules per engagement.
+After setup, use `scripts/ap-toggle.sh start` and `scripts/ap-toggle.sh stop` to bring the AP up and down per engagement.
 
 ## Architecture
 
