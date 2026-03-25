@@ -232,14 +232,14 @@ class SessionManager:
 
         session_id = str(uuid.uuid4())
         safe_name = _sanitize_name(name)
-        date_prefix = datetime.now(timezone.utc).strftime("%Y%m%d")
+        timestamp = datetime.now().strftime("%d-%m-%Y-%H-%M")
 
-        # Build unique folder name
-        folder_name = f"{date_prefix}-{safe_name}"
+        # Build unique folder name: DD-MM-YYYY-HH-MM_MITM_<name>
+        folder_name = f"{timestamp}_MITM_{safe_name}"
         eng_path = self._engagements_dir / folder_name
         counter = 1
         while eng_path.exists():
-            folder_name = f"{date_prefix}-{safe_name}-{counter}"
+            folder_name = f"{timestamp}_MITM_{safe_name}-{counter}"
             eng_path = self._engagements_dir / folder_name
             counter += 1
 
