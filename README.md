@@ -6,18 +6,18 @@ Built for use with Claude Code on a Raspberry Pi 5, but works with any MCP clien
 
 ## What it does
 
-- **TLS interception** -- transparent proxy via mitmproxy, no device configuration needed
-- **Finding extraction** -- auto-detects auth tokens, credentials, cloud keys, cert pinning failures, interesting endpoints
-- **Packet capture** -- raw pcap via tshark for evidence
-- **WiFi AP management** -- toggle hostapd/dnsmasq/iptables per engagement
-- **Engagement logging** -- structured JSONL flow logs, per-engagement folders, evidence chain with CA cert
+- **TLS interception:** transparent proxy via mitmproxy, no device configuration needed
+- **Finding extraction:** auto-detects auth tokens, credentials, cloud keys, cert pinning failures, interesting endpoints
+- **Packet capture:** raw pcap via tshark for evidence
+- **WiFi AP management:** toggle hostapd/dnsmasq/iptables per engagement
+- **Engagement logging:** structured JSONL flow logs, per-engagement folders, evidence chain with CA cert
 
 ## Requirements
 
 - Python 3.11+
-- mitmproxy (`pip install mitmproxy`) -- must be in the same venv as the MCP server
-- tshark (`apt install tshark`) -- user must be in the `wireshark` group for unprivileged capture
-- WiFi AP pre-configured (hostapd + dnsmasq) -- see [AP Setup](#ap-setup)
+- mitmproxy (`pip install mitmproxy`): must be in the same venv as the MCP server
+- tshark (`apt install tshark`): user must be in the `wireshark` group for unprivileged capture
+- WiFi AP pre-configured (hostapd + dnsmasq): see [AP Setup](#ap-setup)
 - Raspberry Pi 5 (or any Linux box with WiFi + Ethernet)
 - Operator must be SSH'd over Ethernet, not WiFi
 
@@ -70,9 +70,9 @@ Set `PIDEV_ENGAGEMENTS_DIR` to control where engagement logs are written. Defaul
 
 Three tiers enforced at the MCP server boundary:
 
-- **read-only** -- full autonomy, no side effects
-- **allowed-write** -- autonomous execution, all calls logged
-- **approval-write** -- reserved for future response injection (no MVP tools)
+- **read-only:** full autonomy, no side effects
+- **allowed-write:** autonomous execution, all calls logged
+- **approval-write:** reserved for future response injection (no MVP tools)
 
 Passive interception cannot damage hardware or corrupt device state. The device either connects and talks, or it doesn't.
 
@@ -91,7 +91,7 @@ sudo ./scripts/ap-setup.sh
 sudo ./scripts/ap-setup.sh --ssid MyProbe --passphrase hunter2hunter2 --channel 11
 ```
 
-The script is idempotent -- safe to rerun with different values. It:
+The script is idempotent, safe to rerun with different values. It:
 1. Installs hostapd, dnsmasq, and tshark (pre-answers the non-root capture prompt)
 2. Writes hostapd and dnsmasq configs
 3. Creates a NetworkManager static IP connection for the AP interface
@@ -127,7 +127,7 @@ Pi network stack (hostapd AP on wlan0, eth0 uplink)
 ```
 
 - `session.py` is the only module that manages long-lived subprocesses. Tools call into session.py, never subprocess directly.
-- `addon.py` is standalone -- no imports from mitm_mcp. Runs inside mitmdump, communicates via JSONL files.
+- `addon.py` is standalone, no imports from mitm_mcp. Runs inside mitmdump, communicates via JSONL files.
 
 ## Tests
 
