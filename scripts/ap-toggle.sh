@@ -15,6 +15,7 @@ set -euo pipefail
 WLAN_IF="${MITM_WLAN_IF:-wlan0}"
 PROXY_PORT="${MITM_PROXY_PORT:-8080}"
 NM_AP_CONN="${MITM_NM_CONN:-mitm-ap}"
+IW="$(command -v iw 2>/dev/null || echo /usr/sbin/iw)"
 
 iptables_rules() {
     local action="$1"  # -A or -D
@@ -41,7 +42,7 @@ start_ap() {
     # Wait for NM to actually release the interface. Without this,
     # hostapd races with NM and fails to take over the radio.
     for i in 1 2 3 4 5; do
-        if ! /usr/sbin/iw dev "$WLAN_IF" info 2>/dev/null | grep -q "type managed"; then
+        if ! $IW dev "$WLAN_IF" info 2>/dev/null | grep -q "type managed"; then
             break
         fi
         # NM may still hold wlan0 in managed/connected state; poke it again
@@ -61,7 +62,7 @@ start_ap() {
     # the retry loop handles this.
     sudo systemctl start hostapd 2>/dev/null || true
     for i in 1 2 3 4 5 6 7 8 9 10; do
-        if /usr/sbin/iw dev "$WLAN_IF" info 2>/dev/null | grep -q "type AP"; then
+        if $IW dev "$WLAN_IF" info 2>/dev/null | grep -q "type AP"; then
             break
         fi
         if [ "$i" -eq 1 ]; then
@@ -74,7 +75,7 @@ start_ap() {
         fi
         sleep 1
     done
-    if ! /usr/sbin/iw dev "$WLAN_IF" info 2>/dev/null | grep -q "type AP"; then
+    if ! $IW dev "$WLAN_IF" info 2>/dev/null | grep -q "type AP"; then
         echo "Error: $WLAN_IF not in AP mode after 10 attempts" >&2
         sudo journalctl -u hostapd --no-pager -n 5 >&2
         exit 1
