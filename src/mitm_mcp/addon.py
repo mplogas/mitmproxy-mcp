@@ -381,6 +381,6 @@ class SecurityAddon:
         self._write_event(event)
 
 
-def addons():
-    """mitmproxy entry point. Returns the list of addon instances."""
-    return [SecurityAddon()]
+# mitmproxy entry point: module-level list of addon instances.
+# mitmproxy 11.x iterates this directly (not a callable).
+addons = [SecurityAddon()]

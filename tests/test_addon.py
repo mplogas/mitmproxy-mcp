@@ -339,8 +339,8 @@ class TestOutputEnvVar:
 
 
 class TestAddonsEntryPoint:
-    def test_addons_function_returns_list_with_security_addon(self):
-        result = addon_mod.addons()
+    def test_addons_is_list_with_security_addon(self):
+        result = addon_mod.addons
         assert isinstance(result, list)
         assert len(result) == 1
         assert isinstance(result[0], SecurityAddon)
