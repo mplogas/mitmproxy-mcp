@@ -29,6 +29,9 @@ iptables_rules() {
 start_ap() {
     echo "Starting AP on $WLAN_IF..."
 
+    # Unmask services in case setup hasn't run or a system update re-masked them
+    sudo systemctl unmask hostapd dnsmasq 2>/dev/null || true
+
     # Disconnect any active WiFi connection on wlan0 and assign static IP
     # via the NM connection created by ap-setup.sh
     sudo nmcli device disconnect "$WLAN_IF" 2>/dev/null || true
@@ -54,6 +57,19 @@ start_ap() {
             exit 1
         }
     }
+    # Verify wlan0 is actually in AP mode (NM can race and re-grab the interface)
+    for i in 1 2 3 4 5; do
+        if iw dev "$WLAN_IF" info 2>/dev/null | grep -q "type AP"; then
+            break
+        fi
+        echo "Waiting for AP mode on $WLAN_IF (attempt $i)..."
+        sleep 2
+    done
+    if ! iw dev "$WLAN_IF" info 2>/dev/null | grep -q "type AP"; then
+        echo "Error: $WLAN_IF not in AP mode after starting hostapd" >&2
+        exit 1
+    fi
+
     sudo systemctl start dnsmasq
     iptables_rules -A
     echo "AP started. SSID and config from /etc/hostapd/hostapd.conf"
