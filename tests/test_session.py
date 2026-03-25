@@ -6,7 +6,13 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
-from mitm_mcp.session import Session, SessionManager
+from mitm_mcp.session import (
+    Session,
+    SessionManager,
+    _write_pid_file,
+    _remove_pid_file,
+    _kill_stale_pid,
+)
 
 
 class TestCreateSession:
@@ -173,3 +179,116 @@ class TestCloseSession:
         # Session removed from manager
         with pytest.raises(KeyError):
             mgr.get(session.session_id)
+
+
+class TestPidFileHelpers:
+    def test_write_and_read_pid_file(self, tmp_path):
+        """PID file is written with correct content."""
+        pid_path = tmp_path / ".mitmdump.pid"
+        _write_pid_file(pid_path, 42)
+        assert pid_path.read_text() == "42"
+
+    def test_remove_pid_file(self, tmp_path):
+        """PID file is removed."""
+        pid_path = tmp_path / ".mitmdump.pid"
+        pid_path.write_text("42")
+        _remove_pid_file(pid_path)
+        assert not pid_path.exists()
+
+    def test_remove_nonexistent_pid_file(self, tmp_path):
+        """Removing a nonexistent PID file does not raise."""
+        pid_path = tmp_path / ".mitmdump.pid"
+        _remove_pid_file(pid_path)  # should not raise
+
+    def test_kill_stale_pid_no_file(self, tmp_path):
+        """No-op when PID file does not exist."""
+        pid_path = tmp_path / ".mitmdump.pid"
+        _kill_stale_pid(pid_path, "mitmdump")  # should not raise
+
+    def test_kill_stale_pid_garbage_file(self, tmp_path):
+        """Garbage content in PID file: file removed, no crash."""
+        pid_path = tmp_path / ".mitmdump.pid"
+        pid_path.write_text("not-a-number")
+        _kill_stale_pid(pid_path, "mitmdump")
+        assert not pid_path.exists()
+
+    def test_kill_stale_pid_dead_process(self, tmp_path):
+        """PID file for a dead process: file removed."""
+        pid_path = tmp_path / ".mitmdump.pid"
+        # Use PID 99999999 which almost certainly does not exist
+        pid_path.write_text("99999999")
+        _kill_stale_pid(pid_path, "mitmdump")
+        assert not pid_path.exists()
+
+
+class TestPidFileIntegration:
+    def test_create_writes_mitmdump_pid(self, engagements_dir, mock_subprocess):
+        """create() writes a .mitmdump.pid file."""
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
+             patch("subprocess.Popen", return_value=mock_subprocess):
+            mgr = SessionManager(engagements_dir)
+            mgr.create("test-device")
+
+        pid_path = engagements_dir / ".mitmdump.pid"
+        assert pid_path.exists()
+        assert pid_path.read_text() == str(mock_subprocess.pid)
+
+    def test_close_removes_pid_files(self, engagements_dir, mock_subprocess):
+        """close() removes both PID files."""
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
+             patch("subprocess.Popen", return_value=mock_subprocess):
+            mgr = SessionManager(engagements_dir)
+            session = mgr.create("test-device")
+
+        mgr.close(session.session_id)
+        assert not (engagements_dir / ".mitmdump.pid").exists()
+        assert not (engagements_dir / ".tshark.pid").exists()
+
+    def test_start_capture_writes_tshark_pid(self, engagements_dir, mock_subprocess):
+        """start_capture() writes a .tshark.pid file."""
+        tshark_proc = MagicMock()
+        tshark_proc.poll.return_value = None
+        tshark_proc.pid = 54321
+
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
+             patch("subprocess.Popen", return_value=mock_subprocess):
+            mgr = SessionManager(engagements_dir)
+            session = mgr.create("test-device")
+
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/tshark"), \
+             patch("subprocess.Popen", return_value=tshark_proc):
+            mgr.start_capture(session.session_id)
+
+        pid_path = engagements_dir / ".tshark.pid"
+        assert pid_path.exists()
+        assert pid_path.read_text() == "54321"
+
+    def test_stop_capture_removes_tshark_pid(self, engagements_dir, mock_subprocess):
+        """stop_capture() removes the .tshark.pid file."""
+        tshark_proc = MagicMock()
+        tshark_proc.poll.return_value = None
+        tshark_proc.pid = 54321
+
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/mitmdump"), \
+             patch("subprocess.Popen", return_value=mock_subprocess):
+            mgr = SessionManager(engagements_dir)
+            session = mgr.create("test-device")
+
+        with patch("mitm_mcp.session._find_bin", return_value="/usr/bin/tshark"), \
+             patch("subprocess.Popen", return_value=tshark_proc):
+            mgr.start_capture(session.session_id)
+
+        mgr.stop_capture(session.session_id)
+        assert not (engagements_dir / ".tshark.pid").exists()
+
+    def test_init_cleans_stale_processes(self, engagements_dir):
+        """SessionManager init calls cleanup for stale PIDs."""
+        with patch("mitm_mcp.session._kill_stale_pid") as mock_kill:
+            mgr = SessionManager(engagements_dir)
+            assert mock_kill.call_count == 2
+            mock_kill.assert_any_call(
+                engagements_dir / ".mitmdump.pid", "mitmdump"
+            )
+            mock_kill.assert_any_call(
+                engagements_dir / ".tshark.pid", "tshark"
+            )

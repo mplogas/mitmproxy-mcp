@@ -5,14 +5,18 @@ Tools call into session.py, they never manage subprocesses directly.
 """
 
 import json
+import logging
 import os
 import re
+import signal
 import shutil
 import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 
 def _find_bin(name: str) -> str | None:
@@ -52,6 +56,73 @@ def _terminate_proc(proc: subprocess.Popen) -> None:
         proc.wait(timeout=5)
     except OSError:
         pass
+
+
+def _write_pid_file(path: Path, pid: int) -> None:
+    """Write a PID to a file, creating parent dirs if needed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(pid))
+
+
+def _remove_pid_file(path: Path) -> None:
+    """Remove a PID file if it exists."""
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+
+
+def _kill_stale_pid(pid_path: Path, expected_name: str) -> None:
+    """Read a PID file, kill the process if it matches expected_name, remove the file.
+
+    Uses /proc/<pid>/comm on Linux to verify the process name before killing.
+    This avoids killing an unrelated process that reused the PID.
+    """
+    if not pid_path.is_file():
+        return
+
+    try:
+        pid = int(pid_path.read_text().strip())
+    except (ValueError, OSError):
+        _remove_pid_file(pid_path)
+        return
+
+    # Check if process exists and matches expected name
+    try:
+        comm_path = Path(f"/proc/{pid}/comm")
+        if comm_path.exists():
+            proc_name = comm_path.read_text().strip()
+            if expected_name not in proc_name:
+                log.debug(
+                    "PID %d is %s, not %s -- removing stale PID file",
+                    pid, proc_name, expected_name,
+                )
+                _remove_pid_file(pid_path)
+                return
+        else:
+            # Process does not exist
+            _remove_pid_file(pid_path)
+            return
+
+        log.info("Killing orphaned %s (PID %d)", expected_name, pid)
+        os.kill(pid, signal.SIGTERM)
+
+        # Wait briefly for it to die, then SIGKILL if needed
+        for _ in range(10):
+            if not comm_path.exists():
+                break
+            import time
+            time.sleep(0.5)
+        else:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+
+    except OSError:
+        pass
+    finally:
+        _remove_pid_file(pid_path)
 
 
 class Session:
@@ -132,6 +203,14 @@ class SessionManager:
     def __init__(self, engagements_dir: Path | str):
         self._engagements_dir = Path(engagements_dir)
         self._sessions: dict[str, Session] = {}
+        self._mitmdump_pid_path = self._engagements_dir / ".mitmdump.pid"
+        self._tshark_pid_path = self._engagements_dir / ".tshark.pid"
+        self._cleanup_stale_processes()
+
+    def _cleanup_stale_processes(self) -> None:
+        """Kill orphaned mitmdump/tshark from a previous server run."""
+        _kill_stale_pid(self._mitmdump_pid_path, "mitmdump")
+        _kill_stale_pid(self._tshark_pid_path, "tshark")
 
     def create(
         self,
@@ -195,6 +274,7 @@ class SessionManager:
         env["MITM_FLOWS_OUTPUT"] = str(flows_path)
 
         proxy_proc = subprocess.Popen(cmd, env=env)
+        _write_pid_file(self._mitmdump_pid_path, proxy_proc.pid)
 
         session = Session(
             session_id=session_id,
@@ -227,12 +307,14 @@ class SessionManager:
 
         cmd = [tshark_bin, "-i", interface, "-w", str(session.pcap_path), "-q"]
         tshark_proc = subprocess.Popen(cmd)
+        _write_pid_file(self._tshark_pid_path, tshark_proc.pid)
         session.start_capture(tshark_proc)
 
     def stop_capture(self, session_id: str) -> None:
         """Stop tshark for an existing session."""
         session = self.get(session_id)
         session.stop_capture()
+        _remove_pid_file(self._tshark_pid_path)
 
     def get(self, session_id: str) -> Session:
         """Return a session by ID. Raises KeyError if not found."""
@@ -245,4 +327,6 @@ class SessionManager:
         """Close a session, stopping all subprocesses and removing from tracking."""
         session = self.get(session_id)
         session.close()
+        _remove_pid_file(self._mitmdump_pid_path)
+        _remove_pid_file(self._tshark_pid_path)
         del self._sessions[session_id]
