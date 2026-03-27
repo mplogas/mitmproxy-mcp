@@ -86,13 +86,14 @@ async def tool_start_proxy(
     engagement_name: str,
     port: int = 8080,
     transparent: bool = True,
+    project_path: str | None = None,
 ) -> dict:
     """Create a new MITM proxy session."""
     if not (1 <= port <= 65535):
         return {"error": f"Invalid port: {port}. Must be 1-65535."}
 
     try:
-        session = session_manager.create(engagement_name, port=port, transparent=transparent)
+        session = session_manager.create(engagement_name, port=port, transparent=transparent, project_path=project_path)
     except RuntimeError as exc:
         return {"error": str(exc)}
 

@@ -76,6 +76,10 @@ TOOL_DEFINITIONS = [
                     "default": True,
                     "description": "Enable transparent proxy mode",
                 },
+                "project_path": {
+                    "type": "string",
+                    "description": "Path to a project folder (from project-mcp). If provided, writes to <project_path>/mitm/ instead of creating a standalone engagement.",
+                },
             },
             "required": ["engagement_name"],
         },
@@ -223,6 +227,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 engagement_name=arguments["engagement_name"],
                 port=arguments.get("port", 8080),
                 transparent=arguments.get("transparent", True),
+                project_path=arguments.get("project_path"),
             )
 
         elif name == "stop_proxy":

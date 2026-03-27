@@ -217,6 +217,7 @@ class SessionManager:
         name: str,
         port: int = 8080,
         transparent: bool = True,
+        project_path: str | None = None,
     ) -> Session:
         """Create and start a new MITM session.
 
@@ -231,22 +232,33 @@ class SessionManager:
             )
 
         session_id = str(uuid.uuid4())
-        safe_name = _sanitize_name(name)
-        timestamp = datetime.now().strftime("%d-%m-%Y-%H-%M")
 
-        # Build unique folder name: DD-MM-YYYY-HH-MM_MITM_<name>
-        folder_name = f"{timestamp}_MITM_{safe_name}"
-        eng_path = self._engagements_dir / folder_name
-        counter = 1
-        while eng_path.exists():
-            folder_name = f"{timestamp}_MITM_{safe_name}-{counter}"
+        if project_path is not None:
+            resolved = Path(project_path).resolve()
+            if not resolved.is_relative_to(self._engagements_dir.resolve()):
+                raise ValueError("project_path must be under engagements directory")
+            eng_path = resolved / "mitm"
+            eng_path.mkdir(parents=True, exist_ok=True)
+            (eng_path / "logs").mkdir(exist_ok=True)
+            (eng_path / "artifacts").mkdir(exist_ok=True)
+            (eng_path / "certs").mkdir(exist_ok=True)
+        else:
+            safe_name = _sanitize_name(name)
+            timestamp = datetime.now().strftime("%d-%m-%Y-%H-%M")
+
+            # Build unique folder name: DD-MM-YYYY-HH-MM_MITM_<name>
+            folder_name = f"{timestamp}_MITM_{safe_name}"
             eng_path = self._engagements_dir / folder_name
-            counter += 1
+            counter = 1
+            while eng_path.exists():
+                folder_name = f"{timestamp}_MITM_{safe_name}-{counter}"
+                eng_path = self._engagements_dir / folder_name
+                counter += 1
 
-        # Create directory structure
-        (eng_path / "logs").mkdir(parents=True)
-        (eng_path / "artifacts").mkdir()
-        (eng_path / "certs").mkdir()
+            # Create directory structure
+            (eng_path / "logs").mkdir(parents=True)
+            (eng_path / "artifacts").mkdir()
+            (eng_path / "certs").mkdir()
 
         # Copy mitmproxy CA cert if available
         mitmproxy_ca = Path.home() / ".mitmproxy" / "mitmproxy-ca-cert.pem"
