@@ -129,6 +129,10 @@ Pi network stack (hostapd AP on wlan0, eth0 uplink)
 - `session.py` is the only module that manages long-lived subprocesses. Tools call into session.py, never subprocess directly.
 - `addon.py` is standalone, no imports from mitm_mcp. Runs inside mitmdump, communicates via JSONL files.
 
+## Project Integration
+
+The `start_proxy` tool accepts an optional `project_path` parameter. When provided (from project-mcp's `create_project`), engagement data is written to `<project_path>/mitm/` instead of creating a standalone folder. Omit it for standalone use.
+
 ## Tests
 
 ```bash
